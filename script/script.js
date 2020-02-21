@@ -33,6 +33,14 @@ const typeSite = document.querySelector('.type-site');
 const maxDeadline = document.querySelector('.max-deadline');
 const rangeDeadline = document.querySelector('.range-deadline');
 const deadlineValue = document.querySelector('.deadline-value');
+const calcDescription = document.querySelector('.calc-description');
+const editable = document.getElementById('editable');
+const metrikaYandex = document.getElementById('metrikaYandex');
+const analyticsGoogle = document.getElementById('analyticsGoogle');
+const sendOrder = document.getElementById('sendOrder');
+const cardHead = document.querySelector('.card-head');
+const totalPrice = document.querySelector('.total_price');
+const firstFieldSet = document.querySelector('.first-fieldset');
 
 function declOfNum(n, titles) {
     return n + ' ' + titles[n % 10 === 1 && n % 100 !== 11 ?
@@ -47,23 +55,60 @@ function hideElem(e) {
     e.style.display = 'none';
 }
 
+function dopOptionsString() {
+    let str = '';
+    if (metrikaYandex.checked || analyticsGoogle.checked || sendOrder.checked) {
+        str += 'Подключим';
+        if (metrikaYandex.checked) {
+            str += ' Яндекс Метрику';
+
+            if (analyticsGoogle.checked && sendOrder.checked) {
+                str += ', Гугл Аналитику и отправку заявок на почту.';
+                return str;
+            }
+            if (analyticsGoogle.checked || sendOrder.checked) {
+                str += ' и'
+            }
+        }
+
+        if (analyticsGoogle.checked) {
+            str += ' Гугл Аналитику';
+            if (sendOrder.checked) {
+                str += ' и'
+            }
+        }
+
+        if (sendOrder.checked) {
+            str += ' отправку заявок на почту';
+        }
+        str += '.'
+
+    }
+    return str;
+}
+
 function renderTextContent(total, site, maxDeadlineDay, minDeadlineDay) {
     typeSite.textContent = site;
     totalPriceSum.textContent = total;
     maxDeadline.textContent = declOfNum(maxDeadlineDay, DAYS_NAMES);
     rangeDeadline.min = minDeadlineDay;
     rangeDeadline.max = maxDeadlineDay;
-    deadlineValue.textContent = declOfNum(rangeDeadline.value, DAYS_NAMES);
+
+    calcDescription.textContent = `
+    Сделаем ${site}${adapt.checked ? ', адаптированный под мобильные устройства и планшеты' : ''}.
+    ${editable.checked ? 'Установим панель админстратора, чтобы вы могли самостоятельно менять содержание на сайте без разработчика.' : ''}
+    ${dopOptionsString()}
+    `;
 }
 
-function priceCalculation(elem) {
+function priceCalculation(elem = {}) {
     let result = 0;
     let index = 0;
     const options = [];
     let site = '';
     let maxDeadlineDay = DATA.deadlineDay[index][1];
     let minDeadlineDay = DATA.deadlineDay[index][0];
-    
+    let overPercent = 0;
     if (elem.name === 'whichSite') {
         for (const item of formCalculate.elements) {
             if (item.type === 'checkbox') {
@@ -72,18 +117,22 @@ function priceCalculation(elem) {
         }
         hideElem(fastRange);
     }
-    
+
     for (const item of formCalculate.elements) {
         if (item.name === 'whichSite' && item.checked) {
             index = DATA.whichSite.indexOf(item.value);
+            result += DATA.price[index];
             site = item.dataset.site;
             maxDeadlineDay = DATA.deadlineDay[index][1];
             minDeadlineDay = DATA.deadlineDay[index][0];
         } else if (item.classList.contains('calc-handler') && item.checked) {
             options.push(item.value);
+        } else if (item.classList.contains('want-faster') && item.checked) {
+            const overDay = maxDeadlineDay - rangeDeadline.value;
+            overPercent = overDay * (DATA.deadlinePercent[index] / 100);
         }
     }
-    
+
     options.forEach(function (key) {
         if (typeof (DATA[key]) === 'number') {
             if (key === 'sendOrder') {
@@ -99,14 +148,15 @@ function priceCalculation(elem) {
             }
         }
     });
-    
-    result += DATA.price[index];
+
+
+    result += result * overPercent;
     renderTextContent(result, site, maxDeadlineDay, minDeadlineDay);
 }
 
 function handlerCallBackForm(event) {
     const target = event.target;
-    
+
     if (target.value === 'adapt') {
         if (adapt.checked) {
             mobileTemplates.disabled = false;
@@ -119,13 +169,14 @@ function handlerCallBackForm(event) {
 
     if (target.classList.contains('want-faster')) {
         target.checked ? showElem(fastRange) : hideElem(fastRange);
+        priceCalculation(target);
     }
 
-    if(target.type === 'checkbox') {
-       let textNode = document.querySelector(`.${target.value}_value`);
-       if(textNode) {
-           textNode.textContent = !target.checked ? YES_NO[0] : YES_NO[1];
-       }
+    if (target.type === 'checkbox') {
+        let textNode = document.querySelector(`.${target.value}_value`);
+        if (textNode) {
+            textNode.textContent = !target.checked ? YES_NO[0] : YES_NO[1];
+        }
     }
 
     if (target.classList.contains('calc-handler')) {
@@ -133,9 +184,32 @@ function handlerCallBackForm(event) {
     }
 }
 
+function moveBackTotal() {
+    if (document.documentElement.getBoundingClientRect().bottom > document.documentElement.clientHeight + 200) {
+        totalPrice.classList.remove('totalPriceBottom');
+        firstFieldSet.after(totalPrice);
+        window.removeEventListener('scroll', moveBackTotal);
+        window.addEventListener('scroll', moveTotal);
+    }
+}
+
+function moveTotal() {
+    if (document.documentElement.getBoundingClientRect().bottom < document.documentElement.clientHeight + 200) {
+        totalPrice.classList.add('totalPriceBottom');
+        endButton.before(totalPrice);
+        window.removeEventListener('scroll', moveTotal);
+        window.addEventListener('scroll', moveBackTotal);
+    }
+}
+
+function handleFastRangeChange(event) {
+    deadlineValue.textContent = declOfNum(event.target.value, DAYS_NAMES);
+}
+
 startButton.addEventListener('click', function () {
     showElem(mainForm);
     hideElem(firstScreen);
+    window.addEventListener('scroll', moveTotal);
 });
 
 endButton.addEventListener('click', function () {
@@ -144,6 +218,13 @@ endButton.addEventListener('click', function () {
             hideElem(elem);
         }
     }
+
+    cardHead.textContent = 'Заявка на разработку сайта';
+
 });
 
 formCalculate.addEventListener('change', handlerCallBackForm);
+
+fastRange.addEventListener('input', handleFastRangeChange);
+
+priceCalculation();
