@@ -220,6 +220,8 @@ endButton.addEventListener('click', function () {
     }
 
     cardHead.textContent = 'Заявка на разработку сайта';
+    hideElem(totalPrice);
+    showElem(total);
 
 });
 
